@@ -1,0 +1,41 @@
+# WLST script to resume all data sources in a WebLogic domain
+
+# Update these values as needed
+adminUrl = 't3://localhost:7001'
+adminUser = 'weblogic'
+adminPassword = 'welcome1'
+
+connect(adminUser, adminPassword, adminUrl)
+
+domainRuntime()
+
+servers = cmo.getServers()
+
+for server in servers:
+    serverName = server.getName()
+    print("\n--- Processing server: " + serverName)
+
+    try:
+        cd('/ServerRuntimes/' + serverName + '/JDBCServiceRuntime/' + serverName + '/JDBCDataSourceRuntimeMBeans')
+        datasources = ls(returnMap='true')
+        
+        for ds in datasources:
+            cd(ds)
+            state = get('State')
+            print('DataSource: ' + ds + ' - State: ' + state)
+            
+            if state == 'Suspended':
+                try:
+                    print('Resuming DataSource: ' + ds)
+                    cmo.resume()
+                except Exception as e:
+                    print('Error resuming ' + ds + ': ' + str(e))
+            else:
+                print('Skipping DataSource: ' + ds + ' (State: ' + state + ')')
+            cd('..')
+        cd('../..')
+    except Exception as e:
+        print('Error processing server ' + serverName + ': ' + str(e))
+
+disconnect()
+exit()
