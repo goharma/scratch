@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, quote, unquote
 import logging
 import getpass
+import re
 
 # Setup a single logger for all levels
 logging.basicConfig(
@@ -54,7 +55,10 @@ def scrape(url, visited, base_dir, depth=1, max_depth=2, auth=None):
         # Follow links on the same domain
         base = urlparse(url).netloc
         for link in links:
-            next_url = urljoin(url, link["href"])
+            raw_href = link["href"]
+            # Unescape escaped slashes (\/) to /
+            unescaped_href = re.sub(r'\\/', '/', raw_href)
+            next_url = urljoin(url, unescaped_href)
             if urlparse(next_url).netloc == base and next_url not in visited:
                 scrape(next_url, visited, base_dir, depth + 1, max_depth, auth=auth)
     except Exception as e:
