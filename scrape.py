@@ -40,27 +40,29 @@ def scrape(url, visited, base_dir, depth=1, max_depth=2, auth=None):
         headers = {"X-Requested-By": "MyClient"}
         response = requests.get(url, headers=headers, auth=auth)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        logger.info(f"Page title: {soup.title.string if soup.title else 'No title found'}")
-        links = soup.find_all("a", href=True)
-        logger.info("First 5 links on the page:")
-        for link in links[:5]:
-            logger.info(link["href"])
-        # Save page
-        filepath = safe_filepath(url)
-        full_path = os.path.join(base_dir, filepath)
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(response.text)
-        # Follow links on the same domain
-        base = urlparse(url).netloc
-        for link in links:
-            raw_href = link["href"]
-            # Unescape escaped slashes (\/) to /
-            unescaped_href = re.sub(r'\\/', '/', raw_href)
-            next_url = urljoin(url, unescaped_href)
-            if urlparse(next_url).netloc == base and next_url not in visited:
-                scrape(next_url, visited, base_dir, depth + 1, max_depth, auth=auth)
+        # Try to parse as JSON
+        try:
+            data = response.json()
+            links = data.get("links", [])
+            logger.info("First 5 links on the page:")
+            for link in links[:5]:
+                logger.info(link.get("href", ""))
+            # Save page
+            filepath = safe_filepath(url)
+            full_path = os.path.join(base_dir, filepath)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(response.text)
+            # Follow links on the same domain
+            base = urlparse(url).netloc
+            for link in links:
+                raw_href = link.get("href", "")
+                unescaped_href = re.sub(r'\\/', '/', raw_href)
+                next_url = urljoin(url, unescaped_href)
+                if urlparse(next_url).netloc == base and next_url not in visited:
+                    scrape(next_url, visited, base_dir, depth + 1, max_depth, auth=auth)
+        except Exception as json_exc:
+            logger.error(f"Failed to parse JSON from {url}: {json_exc}")
     except Exception as e:
         logger.error(f"Failed to scrape {url}: {e}")
 
