@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, quote, unquote
 import logging
+import getpass
 
 # Setup a single logger for all levels
 logging.basicConfig(
@@ -29,13 +30,14 @@ def safe_filepath(url):
     filename = quote(path, safe="/")  # keep slashes for subdirs
     return os.path.join(netloc, filename)
 
-def scrape(url, visited, base_dir, depth=1, max_depth=2):
+def scrape(url, visited, base_dir, depth=1, max_depth=2, auth=None):
     if url in visited or depth > max_depth:
         return
     visited.add(url)
     logger.info(f"Scraping: {url}")
     try:
-        response = requests.get(url)
+        headers = {"X-Requested-By": "MyClient"}
+        response = requests.get(url, headers=headers, auth=auth)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         logger.info(f"Page title: {soup.title.string if soup.title else 'No title found'}")
@@ -54,7 +56,7 @@ def scrape(url, visited, base_dir, depth=1, max_depth=2):
         for link in links:
             next_url = urljoin(url, link["href"])
             if urlparse(next_url).netloc == base and next_url not in visited:
-                scrape(next_url, visited, base_dir, depth + 1, max_depth)
+                scrape(next_url, visited, base_dir, depth + 1, max_depth, auth=auth)
     except Exception as e:
         logger.error(f"Failed to scrape {url}: {e}")
 
@@ -67,4 +69,23 @@ if __name__ == "__main__":
         url = "https://" + url
     visited = set()
     base_dir = "."  # Save in current directory
-    scrape(url, visited, base_dir)
+
+    # Accept username and password from command line if provided
+    username = None
+    password = None
+    if len(sys.argv) > 2:
+        username = sys.argv[2]
+    if len(sys.argv) > 3:
+        password = sys.argv[3]
+
+    if username is None:
+        username = input("Enter username for Basic Auth (leave blank for none): ").strip()
+    if username:
+        if password is None:
+            import getpass
+            password = getpass.getpass("Enter password for Basic Auth: ")
+        auth = (username, password)
+    else:
+        auth = None
+
+    scrape(url, visited, base_dir, auth=auth)
