@@ -79,33 +79,20 @@
       ansible.builtin.set_fact:
         updated_inventory: >-
           {% set inv = current_inventory %}
-          {# Add or update the domain block directly under the root of the inventory #}
-          {# We set hosts to 'null' (equivalent to an empty value like 'm41domain1:') for simplicity #}
+
+          {# Ensure domain group exists and its hosts are set #}
           {% set domain_hosts = {} %}
           {% for host_prefix in hosts_list %}
-          {% set _ = domain_hosts.update({ (host_prefix ~ domain): null }) %}
+            {% set _ = domain_hosts.update({ (host_prefix ~ domain): null }) %}
           {% endfor %}
+          {# Combine with recursive=True will create/update the domain and its hosts #}
           {% set inv = inv | combine({ domain: { 'hosts': domain_hosts } }, recursive=True) %}
 
-          {# Ensure 'integ' group exists and add current domain as a child #}
-          {% if 'integ' not in inv %}
-            {% set inv = inv | combine({ 'integ': { 'children': {} } }) %}
-          {% endif %}
-          {% if 'children' not in inv['integ'] %}
-            {% set inv['integ'] = inv['integ'] | combine({ 'children': {} }) %}
-          {% endif %}
-          {# Add the current domain to the 'integ' group's children #}
-          {% set inv['integ']['children'] = inv['integ']['children'] | combine({ domain: null }) %}
+          {# Ensure 'integ' group and its 'children' dictionary exist, then add domain #}
+          {% set inv = inv | combine({ 'integ': { 'children': { domain: null } } }, recursive=True) %}
 
-          {# Ensure 'global' group exists and add 'integ' as a child #}
-          {% if 'global' not in inv %}
-            {% set inv = inv | combine({ 'global': { 'children': {} } }) %}
-          {% endif %}
-          {% if 'children' not in inv['global'] %}
-            {% set inv['global'] = inv['global'] | combine({ 'children': {} }) %}
-          {% endif %}
-          {# Add 'integ' to the 'global' group's children #}
-          {% set inv['global']['children'] = inv['global']['children'] | combine({ 'integ': null }) %}
+          {# Ensure 'global' group and its 'children' dictionary exist, then add integ #}
+          {% set inv = inv | combine({ 'global': { 'children': { 'integ': null } } }, recursive=True) %}
 
           {{ inv }}
 
