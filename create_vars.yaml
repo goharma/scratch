@@ -1,0 +1,116 @@
+# create_vars.yaml
+---
+- name: Create/Update Ansible Inventory Structure
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  # Define default values for variables, which can be overridden by -e (extra vars)
+  vars:
+    env: "{{ env | default('integ') }}"              # Environment (e.g., integ, sandbox)
+    domain: "{{ domain | default('default_domain') }}" # Domain name (e.g., domain1)
+    port: "{{ port | default('8080') }}"            # Port for group_vars
+    admin_host: "{{ admin_host | default('localhost_admin') }}" # Admin host for group_vars
+    host_prefizes: "{{ host_prefizes | default('m41') }}" # Comma-separated host prefixes
+
+    # Convert comma-separated host_prefizes string into a list
+    # Example: 'm41,m42' becomes ['m41', 'm42']
+    hosts_list: "{{ host_prefizes.split(',') | map('trim') | list }}"
+    inventory_file_path: "inventory/{{ env }}/inventory.yaml" # Path to the main inventory file
+
+  tasks:
+    - name: Ensure base 'inventory' directory exists
+      ansible.builtin.file:
+        path: inventory
+        state: directory
+        mode: '0755'
+
+    - name: Ensure environment directory 'inventory/{{ env }}' exists
+      ansible.builtin.file:
+        path: "inventory/{{ env }}"
+        state: directory
+        mode: '0755'
+
+    - name: Ensure group_vars directory 'inventory/{{ env }}/group_vars/{{ domain }}' exists
+      ansible.builtin.file:
+        path: "inventory/{{ env }}/group_vars/{{ domain }}"
+        state: directory
+        mode: '0755'
+        recurse: yes # Create parent directories if they don't exist
+
+    - name: Ensure host_vars directory 'inventory/{{ env }}/host_vars' exists
+      ansible.builtin.file:
+        path: "inventory/{{ env }}/host_vars"
+        state: directory
+        mode: '0755'
+
+    - name: Render group_vars file 'inventory/{{ env }}/group_vars/{{ domain }}/vars.yaml'
+      ansible.builtin.template:
+        src: _templates/group_vars.j2
+        dest: "inventory/{{ env }}/group_vars/{{ domain }}/vars.yaml"
+        mode: '0644'
+
+    - name: Render host_vars file for each host prefix
+      ansible.builtin.template:
+        src: _templates/host_vars.j2
+        dest: "inventory/{{ env }}/host_vars/{{ item }}{{ domain }}.yaml"
+        mode: '0644'
+      loop: "{{ hosts_list }}"
+      vars:
+        # Pass the full host name to the host_vars template for convenience
+        current_host_name: "{{ item }}{{ domain }}"
+
+    - name: Read existing inventory file content if it exists
+      ansible.builtin.slurp:
+        src: "{{ inventory_file_path }}"
+      register: existing_inventory_content
+      ignore_errors: yes # This allows the task to succeed even if the file doesn't exist yet
+
+    - name: Parse existing inventory content or initialize an empty dictionary
+      ansible.builtin.set_fact:
+        current_inventory: >-
+          {% if existing_inventory_content is succeeded and existing_inventory_content.content %}
+            {{ existing_inventory_content.content | b64decode | from_yaml }}
+          {% else %}
+            {} # Initialize as an empty dictionary if the file doesn't exist or is empty
+          {% endif %}
+
+    - name: Update the overall inventory structure with the new domain
+      ansible.builtin.set_fact:
+        updated_inventory: >-
+          {% set inv = current_inventory %}
+          {# Add or update the domain block directly under the root of the inventory #}
+          {# We set hosts to 'null' (equivalent to an empty value like 'm41domain1:') for simplicity #}
+          {% set domain_hosts = {} %}
+          {% for host_prefix in hosts_list %}
+          {% set _ = domain_hosts.update({ (host_prefix ~ domain): null }) %}
+          {% endfor %}
+          {% set inv = inv | combine({ domain: { 'hosts': domain_hosts } }, recursive=True) %}
+
+          {# Ensure 'integ' group exists and add current domain as a child #}
+          {% if 'integ' not in inv %}
+            {% set inv = inv | combine({ 'integ': { 'children': {} } }) %}
+          {% endif %}
+          {% if 'children' not in inv['integ'] %}
+            {% set inv['integ'] = inv['integ'] | combine({ 'children': {} }) %}
+          {% endif %}
+          {# Add the current domain to the 'integ' group's children #}
+          {% set inv['integ']['children'] = inv['integ']['children'] | combine({ domain: null }) %}
+
+          {# Ensure 'global' group exists and add 'integ' as a child #}
+          {% if 'global' not in inv %}
+            {% set inv = inv | combine({ 'global': { 'children': {} } }) %}
+          {% endif %}
+          {% if 'children' not in inv['global'] %}
+            {% set inv['global'] = inv['global'] | combine({ 'children': {} }) %}
+          {% endif %}
+          {# Add 'integ' to the 'global' group's children #}
+          {% set inv['global']['children'] = inv['global']['children'] | combine({ 'integ': null }) %}
+
+          {{ inv }}
+
+    - name: Write the updated cumulative inventory.yaml file
+      ansible.builtin.copy:
+        content: "{{ updated_inventory | to_nice_yaml(indent=2) }}" # Use to_nice_yaml for readable output
+        dest: "{{ inventory_file_path }}"
+        mode: '0644'
