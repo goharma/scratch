@@ -19,9 +19,11 @@ def load_yaml(path):
 from collections import OrderedDict
 
 def save_yaml(data, path):
-    # Sort domain keys (exclude 'integ' and 'global'), then append 'integ' and 'global'
-    domain_keys = sorted([k for k in data if k not in ('integ', 'global')])
-    keys = domain_keys + [k for k in ('integ', 'global') if k in data]
+    # Sort domain keys (exclude 'global'), then append 'global' if present
+    domain_keys = sorted([k for k in data if k != 'global'])
+    keys = domain_keys
+    if 'global' in data:
+        keys.append('global')
     ordered = {k: data[k] for k in keys}
     with open(path, "w") as f:
         yaml.dump(ordered, f, default_flow_style=False, sort_keys=False)
