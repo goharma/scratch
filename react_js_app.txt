@@ -1,0 +1,68 @@
+npx create-react-app rating-app
+cd rating-app
+
+import React, { useState } from 'react';
+
+function App() {
+  const [rating, setRating] = useState("1");
+
+  const handleSubmit = async () => {
+    const payload = { rating };
+
+    try {
+      const response = await fetch("https://example.com/api/rating", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to submit");
+      }
+
+      alert(`Success! Submitted rating: ${rating}`);
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  return (
+    <div style={styles.container}>
+      <h2>Select a rating (1 to 5)</h2>
+      <select
+        value={rating}
+        onChange={(e) => setRating(e.target.value)}
+        style={styles.select}
+      >
+        {[1, 2, 3, 4, 5].map((num) => (
+          <option key={num} value={num}>{num}</option>
+        ))}
+      </select>
+      <button onClick={handleSubmit} style={styles.button}>Submit</button>
+    </div>
+  );
+}
+
+const styles = {
+  container: {
+    marginTop: "100px",
+    textAlign: "center"
+  },
+  select: {
+    fontSize: "18px",
+    margin: "10px",
+    padding: "5px"
+  },
+  button: {
+    fontSize: "16px",
+    padding: "8px 16px",
+    cursor: "pointer"
+  }
+};
+
+export default App;
+
+
+npm start
