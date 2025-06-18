@@ -11,7 +11,6 @@ DB_PASSWORD="mypassword"
 TARGET_NAME="AdminServer"
 TARGET_TYPE="servers"
 
-# === Helper ===
 auth="-u $USERNAME:$PASSWORD"
 headers=(-H "Content-Type: application/json" -H "Accept: application/json")
 
@@ -22,15 +21,9 @@ curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/ch
 curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources \
   -d "{\"Name\": \"$DS_NAME\"}"
 
-# === 3. Configure Driver Parameters ===
+# === 3. Configure Driver Params ===
 curl "${headers[@]}" $auth -X PATCH $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources/$DS_NAME/JDBCResource/JDBCDriverParams \
-  -d @- <<EOF
-{
-  "URL": "$DB_URL",
-  "DriverName": "oracle.jdbc.OracleDriver",
-  "PasswordEncrypted": "$DB_PASSWORD"
-}
-EOF
+  -d "{\"URL\": \"$DB_URL\", \"DriverName\": \"oracle.jdbc.OracleDriver\", \"PasswordEncrypted\": \"$DB_PASSWORD\"}"
 
 # === 4. Set DB Username ===
 curl "${headers[@]}" $auth -X PATCH $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources/$DS_NAME/JDBCResource/JDBCDriverParams/Properties/Properties/user \
@@ -38,19 +31,4 @@ curl "${headers[@]}" $auth -X PATCH $ADMIN_URL/management/weblogic/latest/edit/J
 
 # === 5. Target the DataSource ===
 curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources/$DS_NAME/Targets \
-  -d @- <<EOF
-{
-  "items": [
-    {
-      "identity": [
-        "$TARGET_TYPE",
-        "$TARGET_NAME"
-      ]
-    }
-  ]
-}
-EOF
-
-# === 6. Activate Changes ===
-curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/changeManager/activate \
-  -d '{"timeout": 120000}'
+  -d "{\"items\": [{\"identity\": [\"$TARGET_TYPE\",_]()]()
