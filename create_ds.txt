@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# === Config ===
+ADMIN_URL="http://localhost:7001"
+USERNAME="weblogic"
+PASSWORD="welcome1"
+DS_NAME="MyDataSource"
+DB_URL="jdbc:oracle:thin:@//dbhost:1521/orclpdb"
+DB_USER="myusername"
+DB_PASSWORD="mypassword"
+TARGET_NAME="AdminServer"
+TARGET_TYPE="servers"
+
+# === Helper ===
+auth="-u $USERNAME:$PASSWORD"
+headers=(-H "Content-Type: application/json" -H "Accept: application/json")
+
+# === 1. Start Edit Session ===
+curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/changeManager/startEdit
+
+# === 2. Create JDBCSystemResource ===
+curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources \
+  -d "{\"Name\": \"$DS_NAME\"}"
+
+# === 3. Configure Driver Parameters ===
+curl "${headers[@]}" $auth -X PATCH $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources/$DS_NAME/JDBCResource/JDBCDriverParams \
+  -d @- <<EOF
+{
+  "URL": "$DB_URL",
+  "DriverName": "oracle.jdbc.OracleDriver",
+  "PasswordEncrypted": "$DB_PASSWORD"
+}
+EOF
+
+# === 4. Set DB Username ===
+curl "${headers[@]}" $auth -X PATCH $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources/$DS_NAME/JDBCResource/JDBCDriverParams/Properties/Properties/user \
+  -d "{\"Value\": \"$DB_USER\"}"
+
+# === 5. Target the DataSource ===
+curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/JDBCSystemResources/$DS_NAME/Targets \
+  -d @- <<EOF
+{
+  "items": [
+    {
+      "identity": [
+        "$TARGET_TYPE",
+        "$TARGET_NAME"
+      ]
+    }
+  ]
+}
+EOF
+
+# === 6. Activate Changes ===
+curl "${headers[@]}" $auth -X POST $ADMIN_URL/management/weblogic/latest/edit/changeManager/activate \
+  -d '{"timeout": 120000}'
