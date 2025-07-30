@@ -1,0 +1,6 @@
+[Unit]
+Description=Notify by email when %i is triggered
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/notify_email.sh %i
